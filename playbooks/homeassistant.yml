@@ -32,9 +32,26 @@
               container_name: homeassistant
               volumes:
                 - {{ ha_config_dir }}:/config
+                - /dev/serial:/dev/serial
+                - /etc/localtime:/etc/localtime:ro
+                - /run/dbus:/run/dbus:ro
               network_mode: host
               restart: unless-stopped
               privileged: true
+              depends_on:
+                - matter-server
+
+            matter-server:
+              image: ghcr.io/home-assistant-libs/python-matter-server:stable
+              container_name: matter-server
+              volumes:
+                - matter-server-data:/data
+              network_mode: host
+              restart: unless-stopped
+              privileged: true
+
+          volumes:
+            matter-server-data:
 
     - name: Start Home Assistant
       ansible.builtin.command:
