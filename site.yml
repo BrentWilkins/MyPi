@@ -49,3 +49,8 @@
   ansible.builtin.import_playbook: playbooks/homeassistant.yml
   tags:
     - homeassistant
+
+- name: Backup
+  ansible.builtin.import_playbook: playbooks/backup.yml
+  tags:
+    - backup

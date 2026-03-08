@@ -15,3 +15,6 @@ inventory/host_vars/
 
 # Build output
 dist/
+
+# Local backups
+backups/

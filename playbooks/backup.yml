@@ -1,0 +1,60 @@
+---
+# Playbook: backup.yml — Pull HA config + Matter server data to Mac
+# Run with: uv run ansible-playbook playbooks/backup.yml
+
+- name: Backup Home Assistant and Matter server
+  hosts: all
+  become: true
+
+  vars:
+    backup_tmp_dir: /tmp/ha-backup
+    local_backup_dir: "{{ lookup('env', 'HOME') }}/micro-server/backups/{{ ansible_date_time.date }}"
+    ha_config_dir: /home/brent/homeassistant/config
+
+  tasks:
+    - name: Create temp backup directory on Pi
+      ansible.builtin.file:
+        path: "{{ backup_tmp_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Archive HA config
+      ansible.builtin.archive:
+        path: "{{ ha_config_dir }}"
+        dest: "{{ backup_tmp_dir }}/ha-config.tar.gz"
+        format: gz
+
+    - name: Archive matter-server-data volume
+      ansible.builtin.command:
+        cmd: >-
+          docker run --rm
+          -v matter-server-data:/data:ro
+          -v {{ backup_tmp_dir }}:/backup
+          alpine
+          tar czf /backup/matter-server-data.tar.gz -C /data .
+      changed_when: true
+
+    - name: Create local backup directory
+      ansible.builtin.file:
+        path: "{{ local_backup_dir }}"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+
+    - name: Fetch HA config archive
+      ansible.builtin.fetch:
+        src: "{{ backup_tmp_dir }}/ha-config.tar.gz"
+        dest: "{{ local_backup_dir }}/ha-config.tar.gz"
+        flat: true
+
+    - name: Fetch matter-server-data archive
+      ansible.builtin.fetch:
+        src: "{{ backup_tmp_dir }}/matter-server-data.tar.gz"
+        dest: "{{ local_backup_dir }}/matter-server-data.tar.gz"
+        flat: true
+
+    - name: Clean up temp files on Pi
+      ansible.builtin.file:
+        path: "{{ backup_tmp_dir }}"
+        state: absent

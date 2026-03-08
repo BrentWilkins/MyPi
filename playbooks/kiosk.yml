@@ -74,8 +74,12 @@
       loop:
         - nes
         - snes
+        - n64
         - gba
+        - gb
+        - gbc
         - arcade
+        - genesis
 
   handlers:
     - name: Reload systemd

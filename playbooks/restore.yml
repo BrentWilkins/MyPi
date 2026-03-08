@@ -1,0 +1,101 @@
+---
+# Playbook: restore.yml — Restore HA config + Matter server data from local backup
+# Usage:
+#   uv run ansible-playbook playbooks/restore.yml -e "backup_date=2026-03-07"
+
+- name: Restore Home Assistant and Matter server
+  hosts: all
+  become: true
+
+  vars:
+    backup_date: "{{ lookup('pipe', 'ls ~/micro-server/backups | sort | tail -1') }}"
+    local_backup_dir: "{{ lookup('env', 'HOME') }}/micro-server/backups/{{ backup_date }}"
+    ha_config_dir: /home/brent/homeassistant/config
+    ha_compose_dir: /home/brent/homeassistant
+    restore_tmp_dir: /tmp/ha-restore
+
+  tasks:
+    - name: Verify backup exists locally
+      ansible.builtin.stat:
+        path: "{{ local_backup_dir }}/matter-server-data.tar.gz"
+      delegate_to: localhost
+      become: false
+      register: backup_stat
+      failed_when: not backup_stat.stat.exists
+
+    - name: Show which backup is being restored
+      ansible.builtin.debug:
+        msg: "Restoring from {{ local_backup_dir }}"
+
+    - name: Stop running containers
+      ansible.builtin.command:
+        cmd: docker compose down
+        chdir: "{{ ha_compose_dir }}"
+      changed_when: true
+      failed_when: false
+
+    - name: Create restore temp directory
+      ansible.builtin.file:
+        path: "{{ restore_tmp_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Upload matter-server-data archive
+      ansible.builtin.copy:
+        src: "{{ local_backup_dir }}/matter-server-data.tar.gz"
+        dest: "{{ restore_tmp_dir }}/matter-server-data.tar.gz"
+        mode: "0644"
+
+    - name: Upload HA config archive
+      ansible.builtin.copy:
+        src: "{{ local_backup_dir }}/ha-config.tar.gz"
+        dest: "{{ restore_tmp_dir }}/ha-config.tar.gz"
+        mode: "0644"
+
+    - name: Create matter-server-data volume if missing
+      ansible.builtin.command:
+        cmd: docker volume create matter-server-data
+      register: vol_create
+      changed_when: "'matter-server-data' in vol_create.stdout"
+
+    - name: Restore matter-server-data volume
+      ansible.builtin.command:
+        cmd: >-
+          docker run --rm
+          -v matter-server-data:/data
+          -v {{ restore_tmp_dir }}:/backup
+          alpine
+          sh -c "rm -rf /data/* /data/.[!.]* && tar xzf /backup/matter-server-data.tar.gz -C /data"
+      changed_when: true
+
+    - name: Clear existing HA config
+      ansible.builtin.file:
+        path: "{{ ha_config_dir }}"
+        state: absent
+
+    - name: Recreate HA config directory
+      ansible.builtin.file:
+        path: "{{ ha_config_dir }}"
+        state: directory
+        owner: brent
+        group: brent
+        mode: "0755"
+
+    - name: Restore HA config
+      ansible.builtin.unarchive:
+        src: "{{ restore_tmp_dir }}/ha-config.tar.gz"
+        dest: /home/brent/homeassistant
+        remote_src: true
+        owner: brent
+        group: brent
+
+    - name: Clean up temp files
+      ansible.builtin.file:
+        path: "{{ restore_tmp_dir }}"
+        state: absent
+
+    - name: Start containers
+      ansible.builtin.command:
+        cmd: docker compose up -d
+        chdir: "{{ ha_compose_dir }}"
+      changed_when: true
