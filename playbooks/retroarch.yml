@@ -1,0 +1,17 @@
+---
+# Playbook: retroarch.yml — RetroArch + emulator cores
+# Covers: NES, SNES, Game Boy / GBC / GBA
+
+- name: Install RetroArch
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Install RetroArch and cores
+      ansible.builtin.apt:
+        name:
+          - retroarch          # frontend + Ozone UI
+          - libretro-nestopia  # NES
+          - libretro-snes9x    # SNES
+          - libretro-mgba      # Game Boy / GBC / GBA
+        state: present

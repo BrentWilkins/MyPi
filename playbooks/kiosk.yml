@@ -1,0 +1,83 @@
+---
+# Playbook: kiosk.yml — ES-DE kiosk on X11/Openbox
+# Boot flow: auto-login → startx → Openbox → ES-DE
+
+- name: Configure kiosk
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Download ES-DE binary
+      ansible.builtin.get_url:
+        url: https://github.com/BrentWilkins/MyPi/releases/download/v3.4.0-arm64/es-de
+        dest: /usr/local/bin/es-de
+        mode: "0755"
+
+    - name: Create systemd getty drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/getty@tty1.service.d
+        state: directory
+        mode: "0755"
+
+    - name: Configure auto-login on tty1
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/getty@tty1.service.d/autologin.conf
+        mode: "0644"
+        content: |
+          [Service]
+          ExecStart=
+          ExecStart=-/sbin/agetty --autologin brent --noclear %I $TERM
+      notify: Reload systemd
+
+    - name: Start X on tty1 login
+      ansible.builtin.blockinfile:
+        path: /home/brent/.bash_profile
+        create: true
+        owner: brent
+        group: brent
+        mode: "0644"
+        marker: "# {mark} ANSIBLE MANAGED — kiosk autostart"
+        block: |
+          if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+            exec startx
+          fi
+
+    - name: Create Openbox config directory
+      ansible.builtin.file:
+        path: /home/brent/.config/openbox
+        state: directory
+        owner: brent
+        group: brent
+        mode: "0755"
+
+    - name: Configure Openbox autostart
+      ansible.builtin.copy:
+        dest: /home/brent/.config/openbox/autostart
+        owner: brent
+        group: brent
+        mode: "0644"
+        content: |
+          # Disable screen blanking and power saving
+          xset s off
+          xset -dpms
+          xset s noblank
+          # Launch ES-DE
+          es-de
+
+    - name: Create ROM directories
+      ansible.builtin.file:
+        path: "/home/brent/ROMs/{{ item }}"
+        state: directory
+        owner: brent
+        group: brent
+        mode: "0755"
+      loop:
+        - nes
+        - snes
+        - gba
+        - arcade
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true

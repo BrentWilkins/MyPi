@@ -1,0 +1,42 @@
+FROM debian:trixie AS builder
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    gettext \
+    pkg-config \
+    libsdl2-dev \
+    libavcodec-dev \
+    libavfilter-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libswresample-dev \
+    libswscale-dev \
+    libcurl4-openssl-dev \
+    libpugixml-dev \
+    libfreeimage-dev \
+    libfreetype6-dev \
+    libharfbuzz-dev \
+    libicu-dev \
+    libgit2-dev \
+    libglm-dev \
+    libasound2-dev \
+    libbluetooth-dev \
+    libgl1-mesa-dev \
+    libpoppler-cpp-dev \
+    qt6-base-dev \
+    qt6-declarative-dev \
+    qt6-svg-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch v3.4.0 \
+    https://gitlab.com/es-de/emulationstation-de.git /src
+
+WORKDIR /src
+RUN cmake -DCMAKE_BUILD_TYPE=Release -S . -B build || \
+    (cat /src/build/CMakeFiles/CMakeError.log; exit 1)
+RUN cmake --build build -- -j$(nproc)
+# Minimal output stage — just the binary
+FROM scratch AS export
+COPY --from=builder /src/es-de /es-de

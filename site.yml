@@ -30,7 +30,22 @@
   tags:
     - mame
 
+- name: RetroArch
+  ansible.builtin.import_playbook: playbooks/retroarch.yml
+  tags:
+    - retroarch
+
+- name: Kiosk
+  ansible.builtin.import_playbook: playbooks/kiosk.yml
+  tags:
+    - kiosk
+
 - name: Docker
   ansible.builtin.import_playbook: playbooks/docker.yml
   tags:
     - docker
+
+- name: Home Assistant
+  ansible.builtin.import_playbook: playbooks/homeassistant.yml
+  tags:
+    - homeassistant
