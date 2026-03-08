@@ -12,6 +12,20 @@
         name: avahi-daemon
         state: present
 
+    - name: Exclude Docker interfaces from avahi (avoid veth churn)
+      ansible.builtin.lineinfile:
+        path: /etc/avahi/avahi-daemon.conf
+        regexp: '^#?deny-interfaces='
+        line: 'deny-interfaces=docker0'
+      notify: Restart avahi
+
+    - name: Remove allow-interfaces restriction from avahi
+      ansible.builtin.lineinfile:
+        path: /etc/avahi/avahi-daemon.conf
+        regexp: '^allow-interfaces='
+        line: '#allow-interfaces=eth0'
+      notify: Restart avahi
+
     - name: Ensure avahi-daemon is enabled and running
       ansible.builtin.service:
         name: avahi-daemon
@@ -30,3 +44,9 @@
           - dnsutils
           - iputils-ping
         state: present
+
+  handlers:
+    - name: Restart avahi
+      ansible.builtin.service:
+        name: avahi-daemon
+        state: restarted
