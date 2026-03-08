@@ -1,0 +1,9 @@
+[project]
+name = "micro-server"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.14"
+dependencies = [
+    "ansible>=13.4.0",
+    "ansible-lint>=26.3.0",
+]

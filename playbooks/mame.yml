@@ -1,0 +1,15 @@
+---
+# Playbook 4: MAME
+# Teaches: simple single-package playbook, tags
+
+- name: Install MAME
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Install MAME
+      ansible.builtin.apt:
+        name: mame
+        state: present
+      tags:
+        - mame

@@ -1,0 +1,32 @@
+---
+# Playbook 2: Base Tools
+# Teaches: package lists, service module, idempotency
+
+- name: Install base packages
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Ensure avahi-daemon is installed
+      ansible.builtin.apt:
+        name: avahi-daemon
+        state: present
+
+    - name: Ensure avahi-daemon is enabled and running
+      ansible.builtin.service:
+        name: avahi-daemon
+        state: started
+        enabled: true
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - vim
+          - git
+          - curl
+          - htop
+          - traceroute
+          - net-tools
+          - dnsutils
+          - iputils-ping
+        state: present

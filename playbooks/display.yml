@@ -1,0 +1,22 @@
+---
+# Playbook 3: X11 / Openbox / Chromium
+# Teaches: apt options, grouping related tasks
+
+- name: Install display stack
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Install X11 and Openbox (minimal)
+      ansible.builtin.apt:
+        name:
+          - xserver-xorg
+          - xinit
+          - openbox
+        state: present
+        install_recommends: false
+
+    - name: Install Chromium browser
+      ansible.builtin.apt:
+        name: chromium
+        state: present

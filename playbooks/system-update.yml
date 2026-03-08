@@ -1,0 +1,30 @@
+---
+# Playbook 1: System Updates & EEPROM
+# Teaches: tasks, become (sudo), handlers, modules vs commands
+
+- name: System update and EEPROM
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Update apt cache and full-upgrade
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: full
+        cache_valid_time: 3600
+
+    - name: Check EEPROM update status
+      ansible.builtin.command: rpi-eeprom-update
+      register: eeprom_check
+      failed_when: false
+      changed_when: "'UPDATE AVAILABLE' in eeprom_check.stdout"
+      notify: Apply EEPROM update
+
+  handlers:
+    - name: Apply EEPROM update
+      ansible.builtin.command: rpi-eeprom-update -a
+      notify: Reboot
+
+    - name: Reboot
+      ansible.builtin.reboot:
+        reboot_timeout: 300

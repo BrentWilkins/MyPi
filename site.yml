@@ -1,0 +1,36 @@
+---
+# Site playbook: imports all playbooks in order
+# Usage:
+#   uv run ansible-playbook site.yml               # run everything
+#   uv run ansible-playbook site.yml --tags docker # run only docker
+#   uv run ansible-playbook site.yml --check       # dry-run
+
+- name: System updates
+  ansible.builtin.import_playbook: playbooks/system-update.yml
+  tags:
+    - system-update
+
+- name: Network
+  ansible.builtin.import_playbook: playbooks/network.yml
+  tags:
+    - network
+
+- name: Base packages
+  ansible.builtin.import_playbook: playbooks/base-packages.yml
+  tags:
+    - base
+
+- name: Display stack
+  ansible.builtin.import_playbook: playbooks/display.yml
+  tags:
+    - display
+
+- name: MAME
+  ansible.builtin.import_playbook: playbooks/mame.yml
+  tags:
+    - mame
+
+- name: Docker
+  ansible.builtin.import_playbook: playbooks/docker.yml
+  tags:
+    - docker
