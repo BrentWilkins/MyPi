@@ -52,6 +52,7 @@
 
           volumes:
             matter-server-data:
+              external: true
 
     - name: Start Home Assistant
       ansible.builtin.command:
