@@ -1,0 +1,22 @@
+---
+# Playbook: generate-bootfs.yml — Render cloud-init templates to bootfs/ for SD card flashing
+# Usage:
+#   uv run ansible-playbook playbooks/generate-bootfs.yml --ask-vault-pass
+
+- name: Generate bootfs cloud-init files
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Render user-data
+      ansible.builtin.template:
+        src: "../bootfs/user-data.j2"
+        dest: "../bootfs/user-data"
+        mode: "0600"
+
+    - name: Render network-config
+      ansible.builtin.template:
+        src: "../bootfs/network-config.j2"
+        dest: "../bootfs/network-config"
+        mode: "0600"

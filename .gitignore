@@ -18,3 +18,7 @@ dist/
 
 # Local backups
 backups/
+
+# Generated bootfs files (contain secrets — render with playbooks/generate-bootfs.yml)
+bootfs/user-data
+bootfs/network-config
