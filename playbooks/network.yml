@@ -9,7 +9,7 @@
     static_ip: "10.0.0.10"
     prefix_length: "24"
     gateway: "10.0.0.1"
-    dns_servers: "8.8.8.8 8.8.4.4"
+    dns_servers: "1.1.1.1 1.0.0.1"
 
   tasks:
     - name: Set hostname
