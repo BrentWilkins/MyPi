@@ -2,9 +2,12 @@
 # Playbook: retroarch.yml — RetroArch + emulator cores
 # Covers: NES, SNES, Game Boy / GBC / GBA
 
-- name: Install RetroArch
+- name: Install and configure RetroArch
   hosts: all
   become: true
+
+  vars:
+    retroarch_cfg: /home/{{ ansible_user }}/.config/retroarch/retroarch.cfg
 
   tasks:
     - name: Install RetroArch and cores
@@ -15,3 +18,29 @@
           - libretro-snes9x    # SNES
           - libretro-mgba      # Game Boy / GBC / GBA
         state: present
+
+    - name: Ensure RetroArch config directory exists
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.config/retroarch
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Generate default config if missing
+      ansible.builtin.command:
+        cmd: retroarch --menu --config {{ retroarch_cfg }} -q
+        creates: "{{ retroarch_cfg }}"
+      become: true
+      become_user: "{{ ansible_user }}"
+
+    - name: Set RetroArch kiosk settings
+      ansible.builtin.lineinfile:
+        path: "{{ retroarch_cfg }}"
+        regexp: "^{{ item.key }}\\s*="
+        line: '{{ item.key }} = "{{ item.value }}"'
+      loop:
+        - { key: video_fullscreen, value: "true" }
+        - { key: config_save_on_exit, value: "false" }
+        - { key: video_driver, value: gl }
+

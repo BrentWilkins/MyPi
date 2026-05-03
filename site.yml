@@ -35,6 +35,11 @@
   tags:
     - retroarch
 
+- name: Controllers
+  ansible.builtin.import_playbook: playbooks/controllers.yml
+  tags:
+    - controllers
+
 - name: Kiosk
   ansible.builtin.import_playbook: playbooks/kiosk.yml
   tags:

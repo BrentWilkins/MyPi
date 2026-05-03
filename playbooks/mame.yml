@@ -13,3 +13,11 @@
         state: present
       tags:
         - mame
+
+    - name: Symlink mame into PATH for ES-DE discovery
+      ansible.builtin.file:
+        src: /usr/games/mame
+        dest: /usr/local/bin/mame
+        state: link
+      tags:
+        - mame

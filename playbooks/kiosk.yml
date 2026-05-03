@@ -7,11 +7,44 @@
   become: true
 
   tasks:
-    - name: Download ES-DE binary
+    - name: Install ES-DE runtime dependencies
+      ansible.builtin.apt:
+        name:
+          - libfreeimage3
+          - libgit2-1.9
+          - libavfilter10
+          - libgles2
+          - x11vnc
+        state: present
+
+    - name: Download ES-DE release tarball
       ansible.builtin.get_url:
-        url: https://github.com/BrentWilkins/MyPi/releases/download/v3.4.0-arm64/es-de
-        dest: /usr/local/bin/es-de
-        mode: "0755"
+        url: https://github.com/BrentWilkins/MyPi/releases/download/v3.4.1-arm64/es-de.tar.gz
+        dest: /tmp/es-de.tar.gz
+        mode: "0644"
+
+    - name: Extract ES-DE to /usr/local
+      ansible.builtin.unarchive:
+        src: /tmp/es-de.tar.gz
+        dest: /usr/local
+        remote_src: true
+
+    - name: Symlink libretro cores to standard path
+      ansible.builtin.file:
+        src: /usr/lib/aarch64-linux-gnu/libretro
+        dest: /usr/lib/libretro
+        state: link
+
+    - name: Configure Xorg to use the RP1 display controller
+      ansible.builtin.copy:
+        dest: /usr/share/X11/xorg.conf.d/99-rp1.conf
+        mode: "0644"
+        content: |
+          Section "Device"
+            Identifier "RP1 GPU"
+            Driver     "modesetting"
+            Option     "kmsdev" "/dev/dri/card1"
+          EndSection
 
     - name: Create systemd getty drop-in directory
       ansible.builtin.file:
@@ -26,15 +59,15 @@
         content: |
           [Service]
           ExecStart=
-          ExecStart=-/sbin/agetty --autologin brent --noclear %I $TERM
+          ExecStart=-/sbin/agetty --autologin {{ ansible_user }} --noclear %I $TERM
       notify: Reload systemd
 
     - name: Start X on tty1 login
       ansible.builtin.blockinfile:
-        path: /home/brent/.bash_profile
+        path: /home/{{ ansible_user }}/.bash_profile
         create: true
-        owner: brent
-        group: brent
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0644"
         marker: "# {mark} ANSIBLE MANAGED — kiosk autostart"
         block: |
@@ -44,32 +77,92 @@
 
     - name: Create Openbox config directory
       ansible.builtin.file:
-        path: /home/brent/.config/openbox
+        path: /home/{{ ansible_user }}/.config/openbox
         state: directory
-        owner: brent
-        group: brent
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
+
+    - name: Set x11vnc password
+      ansible.builtin.command:
+        cmd: x11vnc -storepasswd {{ vnc_password }} /home/{{ ansible_user }}/.x11vnc_pass
+      become_user: "{{ ansible_user }}"
+      no_log: true
+      changed_when: true
 
     - name: Configure Openbox autostart
       ansible.builtin.copy:
-        dest: /home/brent/.config/openbox/autostart
-        owner: brent
-        group: brent
+        dest: /home/{{ ansible_user }}/.config/openbox/autostart
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0644"
         content: |
           # Disable screen blanking and power saving
           xset s off
           xset -dpms
           xset s noblank
-          # Launch ES-DE
-          es-de
+          # Source controller mappings if present
+          [ -f ~/.config/sdl-controllers.env ] && . ~/.config/sdl-controllers.env
+          # Share display over VNC (connect from Mac with Screen Sharing to vnc://10.0.0.10)
+          x11vnc -display :0 -rfbauth ~/.x11vnc_pass -forever -quiet &
+          # Launch ES-DE, restart if it exits
+          while true; do es-de; done &
+
+    - name: Create ES-DE custom systems directory
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/ES-DE/custom_systems
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy custom systems config (emulator defaults)
+      ansible.builtin.copy:
+        src: ../templates/es_systems.xml
+        dest: /home/{{ ansible_user }}/ES-DE/custom_systems/es_systems.xml
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
+    - name: Create ES-DE themes directory
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/ES-DE/themes
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Clone modern-es-de theme
+      ansible.builtin.git:
+        repo: https://gitlab.com/es-de/themes/modern-es-de.git
+        dest: /home/{{ ansible_user }}/ES-DE/themes/modern-es-de
+        depth: 1
+        version: HEAD
+      become_user: "{{ ansible_user }}"
+
+    - name: Create ES-DE settings directory
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/ES-DE/settings
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy ES-DE settings (theme + view style)
+      ansible.builtin.template:
+        src: ../templates/es_settings.xml.j2
+        dest: /home/{{ ansible_user }}/ES-DE/settings/es_settings.xml
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+        force: false
 
     - name: Create ROM directories
       ansible.builtin.file:
-        path: "/home/brent/ROMs/{{ item }}"
+        path: "/home/{{ ansible_user }}/ROMs/{{ item }}"
         state: directory
-        owner: brent
-        group: brent
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
       loop:
         - nes
