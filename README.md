@@ -16,12 +16,22 @@ uv run ansible uServer -m ping   # verify connectivity
 
 Run everything:
 ```bash
-uv run ansible-playbook site.yml
+uv run ansible-playbook site.yml --ask-vault-pass
+```
+
+Dry run (check + diff, no changes applied):
+```bash
+uv run ansible-playbook site.yml --check --diff --ask-vault-pass
 ```
 
 Run a specific playbook by tag:
 ```bash
-uv run ansible-playbook site.yml --tags <tag>
+uv run ansible-playbook site.yml --tags <tag> --ask-vault-pass
+```
+
+Or target a single playbook directly:
+```bash
+uv run ansible-playbook playbooks/homeassistant.yml --check --diff --ask-vault-pass
 ```
 
 | Playbook | Tag | Description |
