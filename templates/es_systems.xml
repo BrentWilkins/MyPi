@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!-- ES-DE custom systems: only emulators actually installed on the kiosk -->
+<systemList>
+    <system>
+        <name>arcade</name>
+        <fullname>Arcade</fullname>
+        <path>%ROMPATH%/arcade</path>
+        <extension>.7z .7Z .zip .ZIP</extension>
+        <command label="MAME (Standalone)">%STARTDIR%=~/.mame %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%/arcade %BASENAME%</command>
+        <platform>arcade</platform>
+        <theme>arcade</theme>
+    </system>
+    <system>
+        <name>gba</name>
+        <fullname>Nintendo Game Boy Advance</fullname>
+        <path>%ROMPATH%/gba</path>
+        <extension>.gba .GBA .agb .AGB .7z .7Z .zip .ZIP</extension>
+        <command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>
+        <platform>gba</platform>
+        <theme>gba</theme>
+    </system>
+    <system>
+        <name>n64</name>
+        <fullname>Nintendo 64</fullname>
+        <path>%ROMPATH%/n64</path>
+        <extension>.n64 .N64 .v64 .V64 .z64 .Z64 .7z .7Z .zip .ZIP</extension>
+        <command label="Mupen64Plus-Next">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mupen64plus_next_libretro.so %ROM%</command>
+        <platform>n64</platform>
+        <theme>n64</theme>
+    </system>
+    <system>
+        <name>nes</name>
+        <fullname>Nintendo Entertainment System</fullname>
+        <path>%ROMPATH%/nes</path>
+        <extension>.nes .NES .unf .UNF .unif .UNIF .fds .FDS .7z .7Z .zip .ZIP</extension>
+        <command label="Nestopia UE">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/nestopia_libretro.so %ROM%</command>
+        <platform>nes</platform>
+        <theme>nes</theme>
+    </system>
+    <system>
+        <name>snes</name>
+        <fullname>Nintendo SNES (Super Nintendo)</fullname>
+        <path>%ROMPATH%/snes</path>
+        <extension>.sfc .SFC .smc .SMC .bin .BIN .7z .7Z .zip .ZIP</extension>
+        <command label="Snes9x - Current">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>
+        <platform>snes</platform>
+        <theme>snes</theme>
+    </system>
+</systemList>
