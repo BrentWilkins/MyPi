@@ -10,8 +10,8 @@
   vars:
     backup_date: "{{ lookup('pipe', 'ls ~/micro-server/backups | sort | tail -1') }}"
     local_backup_dir: "{{ lookup('env', 'HOME') }}/micro-server/backups/{{ backup_date }}"
-    ha_config_dir: /home/brent/homeassistant/config
-    ha_compose_dir: /home/brent/homeassistant
+    ha_config_dir: /home/{{ ansible_user }}/homeassistant/config
+    ha_compose_dir: /home/{{ ansible_user }}/homeassistant
     restore_tmp_dir: /tmp/ha-restore
 
   tasks:
@@ -77,17 +77,17 @@
       ansible.builtin.file:
         path: "{{ ha_config_dir }}"
         state: directory
-        owner: brent
-        group: brent
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
 
     - name: Restore HA config
       ansible.builtin.unarchive:
         src: "{{ restore_tmp_dir }}/ha-config.tar.gz"
-        dest: /home/brent/homeassistant
+        dest: /home/{{ ansible_user }}/homeassistant
         remote_src: true
-        owner: brent
-        group: brent
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
 
     - name: Clean up temp files
       ansible.builtin.file:

@@ -9,7 +9,7 @@
   vars:
     backup_tmp_dir: /tmp/ha-backup
     local_backup_dir: "{{ lookup('env', 'HOME') }}/micro-server/backups/{{ ansible_date_time.date }}"
-    ha_config_dir: /home/brent/homeassistant/config
+    ha_config_dir: /home/{{ ansible_user }}/homeassistant/config
 
   tasks:
     - name: Create temp backup directory on Pi
