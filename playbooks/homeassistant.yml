@@ -7,23 +7,52 @@
   become: true
 
   vars:
-    ha_config_dir: /home/brent/homeassistant/config
-    ha_compose_dir: /home/brent/homeassistant
+    ha_config_dir: /home/{{ ansible_user }}/homeassistant/config
+    ha_compose_dir: /home/{{ ansible_user }}/homeassistant
 
   tasks:
     - name: Create HA config directory
       ansible.builtin.file:
         path: "{{ ha_config_dir }}"
         state: directory
-        owner: brent
-        group: brent
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0755"
+
+    - name: Load ip6tables kernel modules on boot
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/ip6tables.conf
+        mode: "0644"
+        content: |
+          ip6table_filter
+          ip6table_nat
+
+    - name: Load ip6tables modules now
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - ip6table_filter
+        - ip6table_nat
+
+    - name: Enable IPv6 forwarding persistently
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-otbr.conf
+        mode: "0644"
+        content: "net.ipv6.conf.all.forwarding=1\n"
+
+    - name: Apply IPv6 forwarding sysctl now
+      ansible.posix.sysctl:
+        name: net.ipv6.conf.all.forwarding
+        value: "1"
+        state: present
+        sysctl_file: /etc/sysctl.d/99-otbr.conf
 
     - name: Deploy docker-compose.yml
       ansible.builtin.copy:
         dest: "{{ ha_compose_dir }}/docker-compose.yml"
-        owner: brent
-        group: brent
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
         mode: "0644"
         content: |
           services:
@@ -40,6 +69,7 @@
               privileged: true
               depends_on:
                 - matter-server
+                - otbr
 
             matter-server:
               image: ghcr.io/home-assistant-libs/python-matter-server:stable
@@ -49,6 +79,18 @@
               network_mode: host
               restart: unless-stopped
               privileged: true
+
+            otbr:
+              image: openthread/otbr:latest
+              container_name: otbr
+              volumes:
+                - /dev/serial/by-id/usb-Nabu_Casa_ZBT-2_DCB4D90C3738-if00:/dev/ttyThread
+              network_mode: host
+              restart: unless-stopped
+              privileged: true
+              command: --radio-url spinel+hdlc+uart:///dev/ttyThread?uart-baudrate=460800
+              # sysctls must be set on the host when using network_mode: host
+              # /etc/sysctl.d/99-otbr.conf: net.ipv6.conf.all.forwarding=1
 
           volumes:
             matter-server-data:
