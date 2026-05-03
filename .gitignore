@@ -23,3 +23,4 @@ backups/
 bootfs/user-data
 bootfs/network-config
 PLAN.md
+.DS_Store
