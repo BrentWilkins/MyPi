@@ -27,6 +27,10 @@
         <fullname>Nintendo 64</fullname>
         <path>%ROMPATH%/n64</path>
         <extension>.n64 .N64 .v64 .V64 .z64 .Z64 .7z .7Z .zip .ZIP</extension>
+        <!-- Mupen64Plus-Next (GLideN64): the prebuilt aarch64 cores don't work on the
+             Pi 5's V3D/Mesa GLES stack (parallel_n64 segfaults, mupen-next isn't built
+             for aarch64), so retroarch.yml compiles this core from source with the
+             rpi5_64 GLES3 preset. HLE, no BIOS. -->
         <command label="Mupen64Plus-Next">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mupen64plus_next_libretro.so %ROM%</command>
         <platform>n64</platform>
         <theme>n64</theme>
