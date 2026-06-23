@@ -38,6 +38,7 @@
         mode: "0644"
       loop:
         - games-nes-keep.txt
+        - games-snes-keep.txt
         - games-arcade-keep.txt
 
     - name: Deploy curation + cover-scraper scripts

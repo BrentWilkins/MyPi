@@ -51,4 +51,5 @@ def curate(system, keep):
 
 snapshot()
 curate("nes", load("games-nes-keep.txt"))
+curate("snes", load("games-snes-keep.txt"))
 curate("arcade", {s + ".zip" for s in load("games-arcade-keep.txt")})

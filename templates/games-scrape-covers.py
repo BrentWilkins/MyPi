@@ -5,9 +5,11 @@
 # into ES-DE's media tree so the kiosk shows box art:
 #   ~/ES-DE/downloaded_media/<system>/covers/<rombasename>.png
 #
-#  - NES:    libretro filename == No-Intro ROM name.
-#  - Arcade: libretro filename == MAME full description (from `mame -listfull`).
+#  - NES/SNES: libretro filename == No-Intro ROM name.
+#  - Arcade:   libretro filename == MAME full description (from `mame -listfull`).
 # Tries fallback variants (libretro char-munge + trimming trailing "(...)").
+# A few covers libretro simply doesn't carry are fetched from a direct URL
+# override instead (see *_OVERRIDE maps below).
 # Deployed + invoked by playbooks/games.yml. Re-runnable (idempotent overwrite).
 import os, re, subprocess, urllib.request, urllib.parse
 
@@ -23,6 +25,13 @@ UA = {"User-Agent": "Mozilla/5.0 cover-scraper"}
 ARCADE_OVERRIDE = {
     "ddragon": "Double Dragon (World)",
     "tmnt": "Teenage Mutant Ninja Turtles (World 4 Players)",
+}
+
+# Covers libretro-thumbnails doesn't carry under any name variant. Keyed by ROM
+# basename (no extension) -> direct image URL. Saved with the URL's extension.
+NES_OVERRIDE = {
+    "Ice Climber (USA, Europe, Asia) (En)":
+        "https://upload.wikimedia.org/wikipedia/en/d/df/IceClimberboxartnes.jpg",
 }
 
 def keep(name):
@@ -56,6 +65,33 @@ def fetch(sysname, title, dest):
             continue
     return False
 
+def fetch_url(url, dest):
+    try:
+        data = urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=20).read()
+        if len(data) < 100:
+            return False
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        open(dest, "wb").write(data)
+        return True
+    except Exception:
+        return False
+
+# Console systems whose libretro filename == the (No-Intro) ROM filename.
+def scrape_by_filename(sysname, system, keeplist, override=None):
+    names, override, hit = keep(keeplist), override or {}, 0
+    for fn in names:
+        base = os.path.splitext(fn)[0]
+        if base in override:
+            url = override[base]
+            ext = os.path.splitext(url)[1] or ".png"
+            ok = fetch_url(url, f"{MEDIA}/{system}/covers/{base}{ext}")
+        else:
+            ok = fetch(sysname, base, f"{MEDIA}/{system}/covers/{base}.png")
+        hit += ok
+        if not ok:
+            print(f"  miss: {base}")
+    print(f"{system.upper()} covers: {hit}/{len(names)}")
+
 def mame_desc(short):
     try:
         out = subprocess.run(["/usr/games/mame", "-listfull", short],
@@ -68,12 +104,11 @@ def mame_desc(short):
         pass
     return None
 
-# NES — match by ROM filename
-nes = keep("games-nes-keep.txt")
-hit = sum(fetch("Nintendo - Nintendo Entertainment System",
-                os.path.splitext(fn)[0],
-                f"{MEDIA}/nes/covers/{os.path.splitext(fn)[0]}.png") for fn in nes)
-print(f"NES covers: {hit}/{len(nes)}")
+# NES / SNES — match by ROM filename
+scrape_by_filename("Nintendo - Nintendo Entertainment System",
+                   "nes", "games-nes-keep.txt", NES_OVERRIDE)
+scrape_by_filename("Nintendo - Super Nintendo Entertainment System",
+                   "snes", "games-snes-keep.txt")
 
 # Arcade — match by MAME description
 arc = keep("games-arcade-keep.txt")
