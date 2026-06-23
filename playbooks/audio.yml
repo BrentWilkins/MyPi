@@ -1,0 +1,58 @@
+---
+# Playbook: audio.yml — PipeWire audio stack + Bluetooth headset (A2DP)
+#
+# The Pi has no analog audio jack; the only ALSA outputs are the two HDMI ports.
+# Game audio is meant to play through a Bluetooth headset instead. That needs a
+# real audio server with the BlueZ plugin — BlueZ alone only does HID/HFP, not a
+# high-quality A2DP audio sink.
+#
+# Installing PipeWire also fixed standalone MAME segfaulting in audio init: with
+# no audio server present, every MAME sound backend crashed, which is why
+# es_systems.xml used to pass `-sound none`. That workaround is now removed.
+
+- name: Configure audio (PipeWire + Bluetooth headset)
+  hosts: all
+  become: true
+
+  vars:
+    # Bluetooth headset to auto-connect on boot. After a fresh flash the device
+    # must be re-paired once (the BlueZ link key is a per-pairing secret and is
+    # not stored in git): put the headset in pairing mode and run
+    #   uv run ansible-playbook site.yml --tags pair-headset
+    bt_headset_mac: "41:42:F0:00:28:77"
+    bt_headset_name: "H1"
+
+  tasks:
+    - name: Install PipeWire audio stack with Bluetooth (A2DP) support
+      ansible.builtin.apt:
+        name:
+          - pipewire             # audio server
+          - pipewire-pulse       # PulseAudio-compatible server (apps + MAME route here)
+          - pipewire-alsa        # ALSA apps route into PipeWire
+          - wireplumber          # session/policy manager (provides wpctl)
+          - libspa-0.2-bluetooth # BlueZ A2DP/HFP backend — registers Audio Sink with BlueZ
+        state: present
+
+    # The PipeWire/WirePlumber user services are enabled by the package postinst,
+    # but they only run while a user session exists. Lingering starts them at boot
+    # so the trusted headset auto-connects before anyone touches the kiosk.
+    - name: Enable lingering so PipeWire starts at boot
+      ansible.builtin.command:
+        cmd: loginctl enable-linger {{ ansible_user }}
+        creates: /var/lib/systemd/linger/{{ ansible_user }}
+
+    # Manual step — only runs with `--tags pair-headset` and the headset in
+    # pairing mode. Pairing is interactive at the radio level (it needs the device
+    # discoverable), so it can't be part of an unattended provisioning run.
+    - name: Pair, trust and connect the Bluetooth headset
+      ansible.builtin.shell: |
+        set -e
+        bluetoothctl --timeout 20 scan on >/dev/null 2>&1 || true
+        bluetoothctl pair {{ bt_headset_mac }}
+        bluetoothctl trust {{ bt_headset_mac }}
+        bluetoothctl connect {{ bt_headset_mac }}
+      register: bt_pair
+      changed_when: true
+      tags:
+        - pair-headset
+        - never

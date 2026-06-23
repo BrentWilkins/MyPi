@@ -6,6 +6,9 @@
         <fullname>Arcade</fullname>
         <path>%ROMPATH%/arcade</path>
         <extension>.7z .7Z .zip .ZIP</extension>
+        <!-- Sound is enabled: MAME used to segfault in audio init because no audio
+             server was installed. The kiosk now runs PipeWire (see audio.yml), so the
+             default sound backend works and routes to the active sink (Bluetooth/HDMI). -->
         <command label="MAME (Standalone)">%STARTDIR%=~/.mame %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%/arcade %BASENAME%</command>
         <platform>arcade</platform>
         <theme>arcade</theme>

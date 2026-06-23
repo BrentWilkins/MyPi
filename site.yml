@@ -25,6 +25,11 @@
   tags:
     - display
 
+- name: Audio (PipeWire + Bluetooth)
+  ansible.builtin.import_playbook: playbooks/audio.yml
+  tags:
+    - audio
+
 - name: MAME
   ansible.builtin.import_playbook: playbooks/mame.yml
   tags:

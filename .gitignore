@@ -13,6 +13,9 @@ wheels/
 *.retry
 inventory/host_vars/
 
+# Serena MCP tool cache (local)
+.serena/
+
 # Build output
 dist/
 
