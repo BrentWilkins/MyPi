@@ -50,6 +50,11 @@
   tags:
     - kiosk
 
+- name: Games (curation + box art)
+  ansible.builtin.import_playbook: playbooks/games.yml
+  tags:
+    - games
+
 - name: Docker
   ansible.builtin.import_playbook: playbooks/docker.yml
   tags:
