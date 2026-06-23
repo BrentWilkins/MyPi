@@ -9,7 +9,12 @@
         <!-- Sound is enabled: MAME used to segfault in audio init because no audio
              server was installed. The kiosk now runs PipeWire (see audio.yml), so the
              default sound backend works and routes to the active sink (Bluetooth/HDMI). -->
-        <command label="MAME (Standalone)">%STARTDIR%=~/.mame %EMULATOR_MAME% -rompath %GAMEDIR%\;%ROMPATH%/arcade %BASENAME%</command>
+        <!-- Force the raw SDL joystick provider. Without this MAME's "auto" picks the
+             SDL GameController backend (because the DragonRise GUID is in the SDL
+             gamecontroller mapping), which renumbers buttons by gamepad semantics and
+             breaks the raw JOYCODE_1_BUTTON9/10 = Select/Start binds in mame_default.cfg
+             (Coin/Start and the Select+Start exit combo). sdljoy = raw button indices. -->
+        <command label="MAME (Standalone)">%STARTDIR%=~/.mame %EMULATOR_MAME% -joystickprovider sdljoy -rompath %GAMEDIR%\;%ROMPATH%/arcade %BASENAME%</command>
         <platform>arcade</platform>
         <theme>arcade</theme>
     </system>

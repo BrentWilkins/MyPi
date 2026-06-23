@@ -1,0 +1,23 @@
+# RetroArch per-core input remap — NES (Nestopia core).
+#
+# Deployed to ~/.config/retroarch/config/remaps/Nestopia/Nestopia.rmp (controllers.yml).
+# The NES only uses two action buttons (B = run/fire, A = jump), so the stick's six
+# buttons would otherwise leave four "dead." This remap (RetroPad -> RetroPad) makes
+# every button do something intuitive: the left + middle columns all fire (B), the
+# right column jumps (A).
+#
+#   physical   base(RetroPad)   NES action
+#   b0 (TL)    Y         ->     B (fire)
+#   b1 (TM)    X         ->     B (fire)
+#   b2 (TR)    L         ->     A (jump)
+#   b3 (BL)    B         ->     B (fire)
+#   b4 (BM)    A         ->     A (jump)
+#   b5 (BR)    R         ->     A (jump)
+#
+# RetroPad button indices: B=0, A=8.
+input_player1_btn_y = "0"
+input_player1_btn_x = "0"
+input_player1_btn_l = "8"
+input_player1_btn_b = "0"
+input_player1_btn_a = "8"
+input_player1_btn_r = "8"

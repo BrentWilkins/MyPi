@@ -1,0 +1,15 @@
+# Two identical DragonRise arcade encoders (VID:PID 0079:0006) report a zero GUID
+# and the same name, so nothing distinguishes them but the physical USB port.
+# Pin a stable, human-readable symlink to each port so the sticks are always
+# identifiable (for diagnostics and any path-addressable tooling):
+#
+#   dragonrise-p1 = the working stick, port 3-2  (controller xhci-hcd.1)
+#   dragonrise-p2 = the second stick, port 1-2   (controller xhci-hcd.0)
+#
+# NOTE: RetroArch (udev joypad driver) and SDL/ES-DE do NOT order pads by these
+# symlinks. RetroArch orders by libudev syspath sort, which is fixed by physical
+# port: port 1-2 (1f00200000.usb) sorts before port 3-2 (1f00300000.usb), so the
+# working stick lands in pad slot 1. controllers.yml therefore sets
+# input_player1_joypad_index = 1 so the working stick is Player 1.
+SUBSYSTEM=="input", KERNEL=="js[0-9]*", ENV{ID_PATH}=="platform-xhci-hcd.1-usb-0:2:1.0", SYMLINK+="input/dragonrise-p1", GROUP="input", MODE="0660"
+SUBSYSTEM=="input", KERNEL=="js[0-9]*", ENV{ID_PATH}=="platform-xhci-hcd.0-usb-0:2:1.0", SYMLINK+="input/dragonrise-p2", GROUP="input", MODE="0660"
