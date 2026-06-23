@@ -41,6 +41,79 @@
         cmd: loginctl enable-linger {{ ansible_user }}
         creates: /var/lib/systemd/linger/{{ ansible_user }}
 
+    # Prefer high-quality A2DP and never fall back to the HFP mic profile, so a
+    # reconnect always comes back as a proper audio sink. WirePlumber reads this
+    # drop-in at startup (boot, via lingering) — no daemon-reload needed.
+    - name: Create WirePlumber drop-in directory
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.config/wireplumber/wireplumber.conf.d
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy WirePlumber A2DP config
+      ansible.builtin.copy:
+        src: ../templates/wireplumber-bluez-a2dp.conf
+        dest: /home/{{ ansible_user }}/.config/wireplumber/wireplumber.conf.d/51-bluez-a2dp.conf
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
+    # Trusted devices don't always auto-connect (cheap headsets are flaky), so a
+    # user service retries `bluetoothctl connect` for a minute at session start.
+    - name: Create user bin directory
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.local/bin
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy headset-connect script
+      ansible.builtin.template:
+        src: ../templates/headset-connect.sh.j2
+        dest: /home/{{ ansible_user }}/.local/bin/headset-connect.sh
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Create user systemd directory
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.config/systemd/user
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy headset-connect user service
+      ansible.builtin.copy:
+        src: ../templates/headset-connect.service
+        dest: /home/{{ ansible_user }}/.config/systemd/user/headset-connect.service
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
+    # Enable declaratively via the wants symlink so it survives a reflash without
+    # needing a running user bus during provisioning; picked up at next boot.
+    - name: Create default.target.wants directory
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.config/systemd/user/default.target.wants
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Enable headset-connect service at boot
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.config/systemd/user/default.target.wants/headset-connect.service
+        src: ../headset-connect.service
+        state: link
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        follow: false
+        force: true
+
     # Manual step — only runs with `--tags pair-headset` and the headset in
     # pairing mode. Pairing is interactive at the radio level (it needs the device
     # discoverable), so it can't be part of an unattended provisioning run.

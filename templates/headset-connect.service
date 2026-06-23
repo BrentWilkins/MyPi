@@ -1,0 +1,13 @@
+[Unit]
+Description=Connect Bluetooth headset (A2DP) at session start
+# WirePlumber must be up first so the A2DP sink is created as soon as the
+# headset connects. bluetooth.target is a system unit; the retry loop in the
+# script covers the radio not being ready yet, so we don't order against it.
+After=wireplumber.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/headset-connect.sh
+
+[Install]
+WantedBy=default.target
