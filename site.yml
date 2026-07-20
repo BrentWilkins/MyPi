@@ -25,7 +25,7 @@
   tags:
     - display
 
-- name: Audio (PipeWire + Bluetooth)
+- name: Audio (PipeWire over HDMI)
   ansible.builtin.import_playbook: playbooks/audio.yml
   tags:
     - audio

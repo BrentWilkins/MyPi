@@ -1,131 +1,67 @@
 ---
-# Playbook: audio.yml — PipeWire audio stack + Bluetooth headset (A2DP)
+# Playbook: audio.yml — PipeWire audio stack, output over HDMI
 #
 # The Pi has no analog audio jack; the only ALSA outputs are the two HDMI ports.
-# Game audio is meant to play through a Bluetooth headset instead. That needs a
-# real audio server with the BlueZ plugin — BlueZ alone only does HID/HFP, not a
-# high-quality A2DP audio sink.
+# Game audio plays through the display: analog speakers are wired into the
+# display's own headphone jack, and the display de-embeds the HDMI audio to that
+# jack. WirePlumber only creates a sink for an HDMI port that has a connected
+# display, so the active display's HDMI is the sole sink and becomes the default
+# on its own — no explicit default-sink selection needed.
 #
 # Installing PipeWire also fixed standalone MAME segfaulting in audio init: with
 # no audio server present, every MAME sound backend crashed, which is why
 # es_systems.xml used to pass `-sound none`. That workaround is now removed.
+#
+# History: this build previously routed game audio to a Bluetooth A2DP headset.
+# That was dropped in favour of HDMI speakers; the teardown tasks below also
+# remove the leftover headset service/config on any box provisioned before the
+# switch, so the headset can never grab the default sink again.
 
-- name: Configure audio (PipeWire + Bluetooth headset)
+- name: Configure audio (PipeWire over HDMI)
   hosts: all
   become: true
 
-  vars:
-    # Bluetooth headset to auto-connect on boot. After a fresh flash the device
-    # must be re-paired once (the BlueZ link key is a per-pairing secret and is
-    # not stored in git): put the headset in pairing mode and run
-    #   uv run ansible-playbook site.yml --tags pair-headset
-    bt_headset_mac: "41:42:F0:00:28:77"
-    bt_headset_name: "H1"
-
   tasks:
-    - name: Install PipeWire audio stack with Bluetooth (A2DP) support
+    - name: Install PipeWire audio stack
       ansible.builtin.apt:
         name:
           - pipewire             # audio server
           - pipewire-pulse       # PulseAudio-compatible server (apps + MAME route here)
           - pipewire-alsa        # ALSA apps route into PipeWire
           - wireplumber          # session/policy manager (provides wpctl)
-          - libspa-0.2-bluetooth # BlueZ A2DP/HFP backend — registers Audio Sink with BlueZ
         state: present
 
     # The PipeWire/WirePlumber user services are enabled by the package postinst,
     # but they only run while a user session exists. Lingering starts them at boot
-    # so the trusted headset auto-connects before anyone touches the kiosk.
+    # so audio is up before anyone touches the kiosk.
     - name: Enable lingering so PipeWire starts at boot
       ansible.builtin.command:
         cmd: loginctl enable-linger {{ ansible_user }}
         creates: /var/lib/systemd/linger/{{ ansible_user }}
 
-    # Prefer high-quality A2DP and never fall back to the HFP mic profile, so a
-    # reconnect always comes back as a proper audio sink. WirePlumber reads this
-    # drop-in at startup (boot, via lingering) — no daemon-reload needed.
-    - name: Create WirePlumber drop-in directory
+    # --- Tear down the old Bluetooth A2DP headset setup ----------------------
+    # No-ops on a fresh flash; these clean up boxes provisioned before the switch
+    # to HDMI speakers so the headset service never reclaims the default sink.
+    - name: Remove Bluetooth A2DP userland package
+      ansible.builtin.apt:
+        name: libspa-0.2-bluetooth
+        state: absent
+
+    - name: Disable and remove the headset-connect user service
+      ansible.builtin.systemd_service:
+        name: headset-connect.service
+        scope: user
+        enabled: false
+        state: stopped
+      become: false
+      failed_when: false
+
+    - name: Remove leftover headset files and config
       ansible.builtin.file:
-        path: /home/{{ ansible_user }}/.config/wireplumber/wireplumber.conf.d
-        state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0755"
-
-    - name: Deploy WirePlumber A2DP config
-      ansible.builtin.copy:
-        src: ../templates/wireplumber-bluez-a2dp.conf
-        dest: /home/{{ ansible_user }}/.config/wireplumber/wireplumber.conf.d/51-bluez-a2dp.conf
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0644"
-
-    # Trusted devices don't always auto-connect (cheap headsets are flaky), so a
-    # user service retries `bluetoothctl connect` for a minute at session start.
-    - name: Create user bin directory
-      ansible.builtin.file:
-        path: /home/{{ ansible_user }}/.local/bin
-        state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0755"
-
-    - name: Deploy headset-connect script
-      ansible.builtin.template:
-        src: ../templates/headset-connect.sh.j2
-        dest: /home/{{ ansible_user }}/.local/bin/headset-connect.sh
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0755"
-
-    - name: Create user systemd directory
-      ansible.builtin.file:
-        path: /home/{{ ansible_user }}/.config/systemd/user
-        state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0755"
-
-    - name: Deploy headset-connect user service
-      ansible.builtin.copy:
-        src: ../templates/headset-connect.service
-        dest: /home/{{ ansible_user }}/.config/systemd/user/headset-connect.service
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0644"
-
-    # Enable declaratively via the wants symlink so it survives a reflash without
-    # needing a running user bus during provisioning; picked up at next boot.
-    - name: Create default.target.wants directory
-      ansible.builtin.file:
-        path: /home/{{ ansible_user }}/.config/systemd/user/default.target.wants
-        state: directory
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: "0755"
-
-    - name: Enable headset-connect service at boot
-      ansible.builtin.file:
-        path: /home/{{ ansible_user }}/.config/systemd/user/default.target.wants/headset-connect.service
-        src: ../headset-connect.service
-        state: link
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        follow: false
-        force: true
-
-    # Manual step — only runs with `--tags pair-headset` and the headset in
-    # pairing mode. Pairing is interactive at the radio level (it needs the device
-    # discoverable), so it can't be part of an unattended provisioning run.
-    - name: Pair, trust and connect the Bluetooth headset
-      ansible.builtin.shell: |
-        set -e
-        bluetoothctl --timeout 20 scan on >/dev/null 2>&1 || true
-        bluetoothctl pair {{ bt_headset_mac }}
-        bluetoothctl trust {{ bt_headset_mac }}
-        bluetoothctl connect {{ bt_headset_mac }}
-      register: bt_pair
-      changed_when: true
-      tags:
-        - pair-headset
-        - never
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /home/{{ ansible_user }}/.config/wireplumber/wireplumber.conf.d/51-bluez-a2dp.conf
+        - /home/{{ ansible_user }}/.config/systemd/user/default.target.wants/headset-connect.service
+        - /home/{{ ansible_user }}/.config/systemd/user/headset-connect.service
+        - /home/{{ ansible_user }}/.local/bin/headset-connect.sh
