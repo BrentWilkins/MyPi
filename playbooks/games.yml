@@ -1,0 +1,84 @@
+---
+# Playbook: games.yml — curate the ROM library + scrape box art.
+#
+# ROMs themselves are not in this repo (large, not ours to ship), so the curated
+# *selection* is: keep-lists + scripts are deployed on every run, but the actions
+# that touch ROMs are manual (`never`-tagged) because they depend on ROMs already
+# being restored to ~/ROMs and shouldn't run during unattended provisioning.
+#
+# After a flash, restore ROMs to ~/ROMs, then:
+#   uv run ansible-playbook site.yml --tags curate-games   # reduce to keep-lists
+#   uv run ansible-playbook site.yml --tags scrape-covers  # fetch box art
+#
+# Curation is reversible — non-kept ROMs move to ~/ROMs/_archive/<system>/ and a
+# timestamped inventory is written first; nothing is deleted.
+
+- name: Curate game library and box art
+  hosts: all
+  become: true
+
+  vars:
+    curation_dir: /home/{{ ansible_user }}/.local/share/game-curation
+
+  tasks:
+    - name: Create game-curation directory
+      ansible.builtin.file:
+        path: "{{ curation_dir }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy keep-lists
+      ansible.builtin.copy:
+        src: ../templates/{{ item }}
+        dest: "{{ curation_dir }}/{{ item }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+      loop:
+        - games-nes-keep.txt
+        - games-snes-keep.txt
+        - games-arcade-keep.txt
+
+    - name: Deploy curation + cover-scraper scripts
+      ansible.builtin.copy:
+        src: ../templates/{{ item }}
+        dest: "{{ curation_dir }}/{{ item }}"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+      loop:
+        - games-curate.py
+        - games-scrape-covers.py
+
+    # Manual — depends on ROMs being present. Moves non-kept ROMs aside.
+    - name: Curate ROM library to keep-lists
+      ansible.builtin.command:
+        cmd: python3 {{ curation_dir }}/games-curate.py
+      become: false
+      register: curate_out
+      changed_when: "'archived=' in curate_out.stdout"
+      tags:
+        - curate-games
+        - never
+
+    # Manual — fetches box art from libretro-thumbnails (network).
+    - name: Scrape box-art covers for curated games
+      ansible.builtin.command:
+        cmd: python3 {{ curation_dir }}/games-scrape-covers.py
+      become: false
+      register: covers_out
+      changed_when: true
+      tags:
+        - scrape-covers
+        - never
+
+    - name: Show curation / cover output
+      ansible.builtin.debug:
+        msg: "{{ (curate_out.stdout_lines | default([])) + (covers_out.stdout_lines | default([])) }}"
+      when: curate_out is defined or covers_out is defined
+      tags:
+        - curate-games
+        - scrape-covers
+        - never

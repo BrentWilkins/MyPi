@@ -1,0 +1,67 @@
+---
+# Playbook: audio.yml — PipeWire audio stack, output over HDMI
+#
+# The Pi has no analog audio jack; the only ALSA outputs are the two HDMI ports.
+# Game audio plays through the display: analog speakers are wired into the
+# display's own headphone jack, and the display de-embeds the HDMI audio to that
+# jack. WirePlumber only creates a sink for an HDMI port that has a connected
+# display, so the active display's HDMI is the sole sink and becomes the default
+# on its own — no explicit default-sink selection needed.
+#
+# Installing PipeWire also fixed standalone MAME segfaulting in audio init: with
+# no audio server present, every MAME sound backend crashed, which is why
+# es_systems.xml used to pass `-sound none`. That workaround is now removed.
+#
+# History: this build previously routed game audio to a Bluetooth A2DP headset.
+# That was dropped in favour of HDMI speakers; the teardown tasks below also
+# remove the leftover headset service/config on any box provisioned before the
+# switch, so the headset can never grab the default sink again.
+
+- name: Configure audio (PipeWire over HDMI)
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Install PipeWire audio stack
+      ansible.builtin.apt:
+        name:
+          - pipewire             # audio server
+          - pipewire-pulse       # PulseAudio-compatible server (apps + MAME route here)
+          - pipewire-alsa        # ALSA apps route into PipeWire
+          - wireplumber          # session/policy manager (provides wpctl)
+        state: present
+
+    # The PipeWire/WirePlumber user services are enabled by the package postinst,
+    # but they only run while a user session exists. Lingering starts them at boot
+    # so audio is up before anyone touches the kiosk.
+    - name: Enable lingering so PipeWire starts at boot
+      ansible.builtin.command:
+        cmd: loginctl enable-linger {{ ansible_user }}
+        creates: /var/lib/systemd/linger/{{ ansible_user }}
+
+    # --- Tear down the old Bluetooth A2DP headset setup ----------------------
+    # No-ops on a fresh flash; these clean up boxes provisioned before the switch
+    # to HDMI speakers so the headset service never reclaims the default sink.
+    - name: Remove Bluetooth A2DP userland package
+      ansible.builtin.apt:
+        name: libspa-0.2-bluetooth
+        state: absent
+
+    - name: Disable and remove the headset-connect user service
+      ansible.builtin.systemd_service:
+        name: headset-connect.service
+        scope: user
+        enabled: false
+        state: stopped
+      become: false
+      failed_when: false
+
+    - name: Remove leftover headset files and config
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /home/{{ ansible_user }}/.config/wireplumber/wireplumber.conf.d/51-bluez-a2dp.conf
+        - /home/{{ ansible_user }}/.config/systemd/user/default.target.wants/headset-connect.service
+        - /home/{{ ansible_user }}/.config/systemd/user/headset-connect.service
+        - /home/{{ ansible_user }}/.local/bin/headset-connect.sh

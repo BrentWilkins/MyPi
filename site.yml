@@ -25,6 +25,11 @@
   tags:
     - display
 
+- name: Audio (PipeWire over HDMI)
+  ansible.builtin.import_playbook: playbooks/audio.yml
+  tags:
+    - audio
+
 - name: MAME
   ansible.builtin.import_playbook: playbooks/mame.yml
   tags:
@@ -44,6 +49,11 @@
   ansible.builtin.import_playbook: playbooks/kiosk.yml
   tags:
     - kiosk
+
+- name: Games (curation + box art)
+  ansible.builtin.import_playbook: playbooks/games.yml
+  tags:
+    - games
 
 - name: Docker
   ansible.builtin.import_playbook: playbooks/docker.yml

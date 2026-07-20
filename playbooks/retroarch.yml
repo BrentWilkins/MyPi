@@ -1,6 +1,6 @@
 ---
 # Playbook: retroarch.yml — RetroArch + emulator cores
-# Covers: NES, SNES, Game Boy / GBC / GBA
+# Covers: NES, SNES, Game Boy / GBC / GBA, N64
 
 - name: Install and configure RetroArch
   hosts: all
@@ -8,6 +8,12 @@
 
   vars:
     retroarch_cfg: /home/{{ ansible_user }}/.config/retroarch/retroarch.cfg
+    libretro_dir: /usr/lib/aarch64-linux-gnu/libretro
+    # mupen64plus-libretro-nx, pinned. Built from source because no prebuilt
+    # aarch64 core works on the Pi 5's V3D/Mesa GLES stack.
+    n64_src_dir: /home/{{ ansible_user }}/build-n64
+    n64_commit: 98c1b0d877542b01314b3b04272282ba223b65b3
+    n64_core: mupen64plus_next_libretro.so
 
   tasks:
     - name: Install RetroArch and cores
@@ -18,6 +24,64 @@
           - libretro-snes9x    # SNES
           - libretro-mgba      # Game Boy / GBC / GBA
         state: present
+
+    # N64: neither the apt repo nor the libretro buildbot ships a working aarch64
+    # N64 core for the Pi 5 — parallel_n64 segfaults in GFX init on V3D/Mesa GLES,
+    # and mupen64plus_next isn't built for aarch64 at all. So compile
+    # mupen64plus-libretro-nx from source with the rpi5_64 GLES3 preset.
+    # MESA=1 + FORCE_GLES3=1 are required: without MESA the rpi5 preset falls into
+    # the legacy VideoCore (-DVC, /opt/vc) branch, which both pulls in a missing
+    # GLES stack and collides cxd4's `VC` register identifier with the -DVC macro
+    # (build fails on rsp.o). HLE — no BIOS required.
+    - name: Install N64 core build dependencies
+      ansible.builtin.apt:
+        name:
+          - git
+          - make
+          - gcc
+          - g++
+          - pkg-config
+          - libgles2-mesa-dev
+          - libegl1-mesa-dev
+          - libdrm-dev
+        state: present
+
+    - name: Check whether the N64 core is already installed
+      ansible.builtin.stat:
+        path: "{{ libretro_dir }}/{{ n64_core }}"
+      register: n64_installed
+
+    - name: Build and install mupen64plus_next (N64) from source
+      when: not n64_installed.stat.exists
+      block:
+        - name: Clone mupen64plus-libretro-nx at the pinned commit
+          ansible.builtin.git:
+            repo: https://github.com/libretro/mupen64plus-libretro-nx
+            dest: "{{ n64_src_dir }}"
+            version: "{{ n64_commit }}"
+            recursive: true
+          become: true
+          become_user: "{{ ansible_user }}"
+
+        - name: Compile the N64 core (rpi5_64, Mesa GLES3)
+          community.general.make:
+            chdir: "{{ n64_src_dir }}"
+            jobs: 4
+            params:
+              platform: rpi5_64
+              MESA: "1"
+              FORCE_GLES3: "1"
+          become: true
+          become_user: "{{ ansible_user }}"
+
+        - name: Install the built N64 core
+          ansible.builtin.copy:
+            src: "{{ n64_src_dir }}/{{ n64_core }}"
+            dest: "{{ libretro_dir }}/{{ n64_core }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0644"
 
     - name: Ensure RetroArch config directory exists
       ansible.builtin.file:

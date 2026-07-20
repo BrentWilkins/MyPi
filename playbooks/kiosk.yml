@@ -15,6 +15,7 @@
           - libavfilter10
           - libgles2
           - x11vnc
+          - mame          # standalone MAME for the 'arcade' system (es_systems.xml)
         state: present
 
     - name: Download ES-DE release tarball
@@ -90,6 +91,14 @@
       no_log: true
       changed_when: true
 
+    - name: Deploy SDL controller mappings (DragonRise stick, etc.)
+      ansible.builtin.copy:
+        src: ../templates/sdl-controllers.env
+        dest: /home/{{ ansible_user }}/.config/sdl-controllers.env
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
     - name: Configure Openbox autostart
       ansible.builtin.copy:
         dest: /home/{{ ansible_user }}/.config/openbox/autostart
@@ -120,6 +129,22 @@
       ansible.builtin.copy:
         src: ../templates/es_systems.xml
         dest: /home/{{ ansible_user }}/ES-DE/custom_systems/es_systems.xml
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
+    - name: Create MAME config directory
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.mame/cfg
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy global MAME input defaults (fight stick coin/start/exit)
+      ansible.builtin.copy:
+        src: ../templates/mame_default.cfg
+        dest: /home/{{ ansible_user }}/.mame/cfg/default.cfg
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         mode: "0644"
