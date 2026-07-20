@@ -8,7 +8,7 @@
         <extension>.7z .7Z .zip .ZIP</extension>
         <!-- Sound is enabled: MAME used to segfault in audio init because no audio
              server was installed. The kiosk now runs PipeWire (see audio.yml), so the
-             default sound backend works and routes to the active sink (Bluetooth/HDMI). -->
+             default sound backend works and routes to the active sink (HDMI). -->
         <!-- Force the raw SDL joystick provider. Without this MAME's "auto" picks the
              SDL GameController backend (because the DragonRise GUID is in the SDL
              gamecontroller mapping), which renumbers buttons by gamepad semantics and
