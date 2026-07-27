@@ -1,0 +1,11 @@
+[Unit]
+Description=DragonRise stick -> Spotify (playerctl) media controls
+After=spotifyd.service
+
+[Service]
+ExecStart=/usr/bin/python3 %h/.local/bin/spotify-gamepad-control.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

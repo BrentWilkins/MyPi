@@ -50,6 +50,11 @@
   tags:
     - kiosk
 
+- name: Spotify Connect + gamepad media controls
+  ansible.builtin.import_playbook: playbooks/spotify.yml
+  tags:
+    - spotify
+
 - name: Games (curation + box art)
   ansible.builtin.import_playbook: playbooks/games.yml
   tags:

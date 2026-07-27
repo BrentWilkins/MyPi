@@ -1,0 +1,147 @@
+---
+# Playbook: spotify.yml — Spotify Connect (spotifyd) + gamepad media controls
+#
+# spotifyd makes the kiosk show up as a Spotify Connect target ("uServer Kiosk")
+# in the Spotify app on phone/desktop — no credentials stored here, playback is
+# started remotely via Connect (zeroconf), audio plays through the same PipeWire
+# -> HDMI -> monitor-speaker path already used for game audio.
+#
+# A second small service reads the DragonRise sticks directly (evdev, not
+# RetroArch/SDL) and drives playerctl (MPRIS) for play/pause/skip/volume, but
+# only while ES-DE is in the foreground — it no-ops whenever RetroArch is
+# running, so it can never steal gameplay input.
+
+- name: Configure Spotify Connect and gamepad media controls
+  hosts: all
+  become: true
+
+  vars:
+    spotifyd_version: "0.4.2"
+    spotifyd_src_dir: /home/{{ ansible_user }}/build-spotifyd
+
+  tasks:
+    # No prebuilt aarch64 binary works here: the GitHub release tarballs are
+    # linked against libssl.so.1.1, which Debian trixie doesn't ship (only
+    # OpenSSL 3) — they fail immediately with a missing shared library. So
+    # build from source against the system's OpenSSL 3, same pattern as the N64
+    # RetroArch core. Needs: (1) a newer Rust than Debian trixie's apt rustc
+    # (1.85) — spotifyd 0.4.2 requires 1.88+, installed via rustup instead;
+    # (2) libdbus-1-dev for the dbus_mpris feature (MPRIS control via playerctl).
+    - name: Install build dependencies
+      ansible.builtin.apt:
+        name:
+          - playerctl
+          - python3-evdev
+          - libssl-dev
+          - libdbus-1-dev
+          - pkg-config
+        state: present
+
+    - name: Check whether spotifyd is already installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/spotifyd
+      register: spotifyd_installed
+
+    - name: Build spotifyd from source
+      when: not spotifyd_installed.stat.exists
+      become: true
+      become_user: "{{ ansible_user }}"
+      block:
+        - name: Check for a rustup-managed toolchain
+          ansible.builtin.stat:
+            path: /home/{{ ansible_user }}/.cargo/bin/cargo
+          register: cargo_installed
+
+        - name: Install rustup (Debian's apt rustc is too old for spotifyd)
+          ansible.builtin.shell:
+            cmd: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          when: not cargo_installed.stat.exists
+
+        - name: Clone spotifyd at the pinned tag
+          ansible.builtin.git:
+            repo: https://github.com/Spotifyd/spotifyd
+            dest: "{{ spotifyd_src_dir }}"
+            version: "v{{ spotifyd_version }}"
+
+        - name: Compile spotifyd (pulseaudio backend + MPRIS, no ALSA)
+          ansible.builtin.shell:
+            cmd: source $HOME/.cargo/env && cargo build --release --no-default-features --features pulseaudio_backend,dbus_mpris
+            chdir: "{{ spotifyd_src_dir }}"
+            executable: /bin/bash
+          # LTO release build; slow (~15-20 min) but low memory-pressure risk
+          # on a Pi 5 (verified: peaked around 230-260MB free, no OOM)
+          async: 2400
+          poll: 30
+
+    - name: Install the built spotifyd binary
+      ansible.builtin.copy:
+        src: "{{ spotifyd_src_dir }}/target/release/spotifyd"
+        dest: /usr/local/bin/spotifyd
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      when: not spotifyd_installed.stat.exists
+
+    - name: Ensure spotifyd config directory exists
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.config/spotifyd
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy spotifyd config
+      ansible.builtin.copy:
+        src: ../templates/spotifyd.conf
+        dest: /home/{{ ansible_user }}/.config/spotifyd/spotifyd.conf
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+
+    - name: Ensure ~/.local/bin exists
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.local/bin
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy gamepad-control script
+      ansible.builtin.copy:
+        src: ../templates/spotify-gamepad-control.py
+        dest: /home/{{ ansible_user }}/.local/bin/spotify-gamepad-control.py
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Ensure systemd user directory exists
+      ansible.builtin.file:
+        path: /home/{{ ansible_user }}/.config/systemd/user
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0755"
+
+    - name: Deploy systemd user units
+      ansible.builtin.copy:
+        src: "../templates/{{ item }}"
+        dest: /home/{{ ansible_user }}/.config/systemd/user/{{ item }}
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0644"
+      loop:
+        - spotifyd.service
+        - spotify-gamepad-control.service
+
+    - name: Enable and start spotifyd + gamepad-control user services
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        scope: user
+        enabled: true
+        state: restarted
+        daemon_reload: true
+      become: false
+      loop:
+        - spotifyd.service
+        - spotify-gamepad-control.service
