@@ -27,66 +27,53 @@
         mode: "0644"
       notify: Reload udev
 
+    # Same file kiosk.yml deploys — keep both on the template so a tag-scoped
+    # `--tags controllers` run can't silently drop the DragonRise SDL mapping
+    # (without it ES-DE reports "no gamepads").
     - name: Install SDL controller mappings
       ansible.builtin.copy:
+        src: ../templates/sdl-controllers.env
         dest: /home/{{ ansible_user }}/.config/sdl-controllers.env
         owner: "{{ ansible_user }}"
         group: "{{ ansible_user }}"
         mode: "0644"
-        content: |
-          # Fosmon Pro Controller clone (paired via Home+Y, handled by hid-generic)
-          # Physical→evtest: A=btn0, B=btn1, X=btn2, Y=btn3, L=btn4, R=btn5, ZL=btn6, ZR=btn7, -=btn8, +=btn9, Home=btn10
-          export SDL_GAMECONTROLLERCONFIG="030000007e0500090200000001000000,Pro Controller,a:b0,b:b1,x:b2,y:b3,leftshoulder:b4,rightshoulder:b5,lefttrigger:b6,righttrigger:b7,back:b8,start:b9,guide:b10,leftstick:b11,rightstick:b12,leftx:a0,lefty:a1,rightx:a2,righty:a3,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,"
 
-    # The working stick is on port 3-2, which RetroArch's udev driver places in pad
-    # slot 1 (libudev sorts the buttonless port 1-2 stick into slot 0). Point Player 1
-    # at slot 1 so the working stick drives P1 in-game; P2 gets the other slot.
-    - name: Pin RetroArch player→joypad indices (working stick = Player 1)
+    # Both DragonRise sticks are now wired with buttons, so this can no longer be a
+    # fixed slot pin (that broke whenever only one stick was plugged in: forcing
+    # Player 1 to slot 1 left it with no device when slot 1 didn't exist). Leave
+    # player→joypad index at RetroArch's default (auto-assign in connection order)
+    # so a single connected stick always becomes Player 1, and reconnecting after
+    # unplugging just works. Player order is therefore decided by physical USB
+    # port (libudev syspath sort): port 1-2 sorts before port 3-2, so the stick in
+    # port 1-2 is Player 1. See templates/99-dragonrise-sticks.rules.
+    - name: Clear any static RetroArch player→joypad index pins
       ansible.builtin.lineinfile:
         path: /home/{{ ansible_user }}/.config/retroarch/retroarch.cfg
-        regexp: '^{{ item.key }}\s*='
-        line: '{{ item.key }} = "{{ item.value }}"'
+        regexp: '^{{ item }}\s*='
+        state: absent
       loop:
-        - { key: input_player1_joypad_index, value: "1" }
-        - { key: input_player2_joypad_index, value: "0" }
+        - input_player1_joypad_index
+        - input_player2_joypad_index
 
-    - name: Set RetroArch controller bindings
+    # These global binds only ever covered player 1, and their layout (a=0, b=1,
+    # x=2, y=3, hat d-pad) contradicted the per-device autoconfig below (y=0, x=1,
+    # l=2, b=3, a=4, r=5, axis lever). Whenever autoconfig didn't load they gave
+    # player 1 a different layout and a dead lever while player 2 went unbound —
+    # exactly the "the two sticks aren't mapped the same" symptom. The autoconfig
+    # matches on vendor/product id, so it covers both sticks in every slot; this
+    # block is redundant. Remove it from any host that already has it.
+    - name: Remove legacy player-1-only RetroArch controller bindings
       ansible.builtin.blockinfile:
         path: /home/{{ ansible_user }}/.config/retroarch/retroarch.cfg
         marker: "# {mark} ANSIBLE MANAGED — controller bindings"
-        block: |
-          input_player1_a_btn = "0"
-          input_player1_b_btn = "1"
-          input_player1_x_btn = "2"
-          input_player1_y_btn = "3"
-          input_player1_l_btn = "4"
-          input_player1_r_btn = "5"
-          input_player1_l2_btn = "6"
-          input_player1_r2_btn = "7"
-          input_player1_select_btn = "8"
-          input_player1_start_btn = "9"
-          input_player1_up_btn = "h0up"
-          input_player1_down_btn = "h0down"
-          input_player1_left_btn = "h0left"
-          input_player1_right_btn = "h0right"
-          input_player1_l3_btn = "11"
-          input_player1_r3_btn = "12"
-          input_player1_l_x_plus_axis = "+0"
-          input_player1_l_x_minus_axis = "-0"
-          input_player1_l_y_plus_axis = "+1"
-          input_player1_l_y_minus_axis = "-1"
-          input_player1_r_x_plus_axis = "+2"
-          input_player1_r_x_minus_axis = "-2"
-          input_player1_r_y_plus_axis = "+3"
-          input_player1_r_y_minus_axis = "-3"
-          input_enable_hotkey_btn = "8"
-          input_exit_emulator_btn = "9"
+        state: absent
 
-    # Per-device autoconfig for the DragonRise stick. Matched by USB vendor/product
-    # id (the SDL GUID is zero), this fixes the lever (analog axes, not a hat) so it
-    # drives the D-pad in every core, and lays down the 6-button SNES layout that the
-    # per-core remaps build on. Takes precedence over the generic binds above when
-    # the stick connects.
+    # Per-device autoconfig for the DragonRise sticks — the single source of truth
+    # for their button layout. Matched by USB vendor/product id (the SDL GUID is
+    # zero) rather than by player slot, so it applies to BOTH identical sticks in
+    # whichever pad slot each lands. Fixes the lever (analog axes, not a hat) so it
+    # drives the D-pad in every core, and lays down the 6-button SNES layout that
+    # the per-core remaps build on.
     - name: Create RetroArch udev autoconfig directory
       ansible.builtin.file:
         path: /home/{{ ansible_user }}/.config/retroarch/autoconfig/udev
